@@ -21,8 +21,13 @@ typedef void (^JPSVolumeButtonBlock)();
 // A shared audio session category
 @property (nonatomic, strong) NSString * sessionCategory;
 
+@property (nonatomic, readonly) BOOL appIsActive;
+@property (nonatomic, readonly) BOOL isStarted;
+
 - (void)startHandler:(BOOL)disableSystemVolumeHandler;
 - (void)stopHandler;
+
+- (BOOL)isHeadsetPluggedIn;
 
 // Returns a button handler with the specified up/down volume button blocks
 + (instancetype)volumeButtonHandlerWithUpBlock:(JPSVolumeButtonBlock)upBlock downBlock:(JPSVolumeButtonBlock)downBlock;

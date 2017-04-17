@@ -85,22 +85,23 @@ static CGFloat minVolume                    = 0.00001f;
         // Prevent setup twice
         return;
     }
-    
-    self.isStarted = YES;
 
+    BOOL result = NO;
     NSError *error = nil;
+    
     self.session = [AVAudioSession sharedInstance];
     // this must be done before calling setCategory or else the initial volume is reset
     [self setInitialVolume];
-    [self.session setCategory:_sessionCategory
-                  withOptions:AVAudioSessionCategoryOptionMixWithOthers
-                        error:&error];
-    if (error) {
+    result = [self.session setCategory:_sessionCategory
+                                withOptions:AVAudioSessionCategoryOptionMixWithOthers
+                                      error:&error];
+    if (!result) {
         NSLog(@"%@", error);
         return;
     }
-    [self.session setActive:YES error:&error];
-    if (error) {
+    
+    result = [self.session setActive:YES error:&error];
+    if (!result) {
         NSLog(@"%@", error);
         return;
     }
@@ -128,6 +129,8 @@ static CGFloat minVolume                    = 0.00001f;
                                                object:nil];
 
     self.volumeView.hidden = !self.disableSystemVolumeHandler;
+    
+    self.isStarted = YES;
 }
 
 - (void)audioSessionInterrupted:(NSNotification*)notification {
@@ -135,20 +138,19 @@ static CGFloat minVolume                    = 0.00001f;
     NSInteger interuptionType = [[interuptionDict valueForKey:AVAudioSessionInterruptionTypeKey] integerValue];
     switch (interuptionType) {
         case AVAudioSessionInterruptionTypeBegan:
-            // NSLog(@"Audio Session Interruption case started.");
+            NSLog(@"Audio Session Interruption case started.");
             break;
         case AVAudioSessionInterruptionTypeEnded:
         {
-            // NSLog(@"Audio Session Interruption case ended.");
+            NSLog(@"Audio Session Interruption case ended.");
             NSError *error = nil;
-            [self.session setActive:YES error:&error];
-            if (error) {
+            BOOL result = [self.session setActive:YES error:&error];
+            if (!result) {
                 NSLog(@"%@", error);
             }
             break;
         }
         default:
-            // NSLog(@"Audio Session Interruption Notification case default.");
             break;
     }
 }
@@ -171,6 +173,15 @@ static CGFloat minVolume                    = 0.00001f;
     if (self.appIsActive && self.isStarted) {
         [self setInitialVolume];
     }
+}
+
+- (BOOL)isHeadsetPluggedIn {
+    AVAudioSessionRouteDescription* route = [[AVAudioSession sharedInstance] currentRoute];
+    for (AVAudioSessionPortDescription* desc in [route outputs]) {
+        if ([[desc portType] isEqualToString:AVAudioSessionPortHeadphones])
+            return YES;
+    }
+    return NO;
 }
 
 #pragma mark - Convenience
