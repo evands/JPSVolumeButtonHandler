@@ -9,6 +9,7 @@
 #import "JPSVolumeButtonHandler.h"
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
+#import "JPSVolumeButtonHandlerLogger+Private.h"
 
 static NSString *const sessionVolumeKeyPath = @"outputVolume";
 static void *sessionContext                 = &sessionContext;
@@ -96,13 +97,13 @@ static CGFloat minVolume                    = 0.1f;
                                 withOptions:AVAudioSessionCategoryOptionMixWithOthers
                                       error:&error];
     if (!result) {
-        NSLog(@"%@", error);
+        JPSLogError(@"setCategory error: %@", [error localizedDescription]);
         return;
     }
     
     result = [self.session setActive:YES error:&error];
     if (!result) {
-        NSLog(@"%@", error);
+        JPSLogError(@"setActive error: %@", [error localizedDescription]);
         return;
     }
 
@@ -127,6 +128,21 @@ static CGFloat minVolume                    = 0.1f;
                                              selector:@selector(applicationDidChangeActive:)
                                                  name:UIApplicationDidBecomeActiveNotification
                                                object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(routeChanged:)
+                                                 name:AVAudioSessionRouteChangeNotification
+                                               object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(mediaServicesWereLost:)
+                                                 name:AVAudioSessionMediaServicesWereLostNotification
+                                               object:nil];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(mediaServicesWereReset:)
+                                                 name:AVAudioSessionMediaServicesWereResetNotification
+                                               object:nil];
 
     self.volumeView.hidden = !self.disableSystemVolumeHandler;
     
@@ -138,15 +154,15 @@ static CGFloat minVolume                    = 0.1f;
     NSInteger interuptionType = [[interuptionDict valueForKey:AVAudioSessionInterruptionTypeKey] integerValue];
     switch (interuptionType) {
         case AVAudioSessionInterruptionTypeBegan:
-            NSLog(@"Audio Session Interruption case started.");
+            JPSLogDebug(@"Audio Session Interruption case started.");
             break;
         case AVAudioSessionInterruptionTypeEnded:
         {
-            NSLog(@"Audio Session Interruption case ended.");
+            JPSLogDebug(@"Audio Session Interruption case ended.");
             NSError *error = nil;
             BOOL result = [self.session setActive:YES error:&error];
             if (!result) {
-                NSLog(@"%@", error);
+                JPSLogError(@"setActive error: %@", error);
             }
             break;
         }
@@ -169,6 +185,7 @@ static CGFloat minVolume                    = 0.1f;
 }
 
 - (void)applicationDidChangeActive:(NSNotification *)notification {
+    JPSLogDebug(@"applicationDidChangeActive: %@", notification.name);
     self.appIsActive = [notification.name isEqualToString:UIApplicationDidBecomeActiveNotification];
     if (self.appIsActive && self.isStarted) {
         [self setInitialVolume];
@@ -182,6 +199,23 @@ static CGFloat minVolume                    = 0.1f;
             return YES;
     }
     return NO;
+}
+
+- (void)routeChanged:(NSNotification *)notification
+{
+    JPSLogInfo(@"routeChanged: %@", notification.userInfo);
+}
+
+- (void)mediaServicesWereLost:(NSNotification *)notification
+{
+    JPSLogInfo(@"mediaServicesWereLost");
+    self.isStarted = NO;
+}
+
+- (void)mediaServicesWereReset:(NSNotification *)notification
+{
+    JPSLogInfo(@"mediaServicesWereReset");
+    [self setupSession];
 }
 
 #pragma mark - Convenience
@@ -199,8 +233,12 @@ static CGFloat minVolume                    = 0.1f;
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
     if (context == sessionContext) {
+        
+        JPSLogDebug(@"volume changed! %@", change);
+        
         if (!self.appIsActive) {
             // Probably control center, skip blocks
+            JPSLogDebug(@"app not active!");
             return;
         }
         
