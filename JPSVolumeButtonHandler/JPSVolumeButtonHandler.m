@@ -19,12 +19,14 @@ static CGFloat minVolume                    = 0.4f;
 @interface JPSVolumeButtonHandler ()
 
 @property (nonatomic, assign) CGFloat          initialVolume;
+@property (nonatomic, assign) CGFloat          lastVolume;
 @property (nonatomic, strong) AVAudioSession * session;
 @property (nonatomic, strong) MPVolumeView   * volumeView;
 @property (nonatomic, assign) BOOL             appIsActive;
 @property (nonatomic, assign) BOOL             isStarted;
 @property (nonatomic, assign) BOOL             disableSystemVolumeHandler;
 @property (nonatomic, assign) BOOL             isAdjustingInitialVolume;
+
 
 @end
 
@@ -106,12 +108,17 @@ static CGFloat minVolume                    = 0.4f;
         JPSLogError(@"setActive error: %@", [error localizedDescription]);
         return;
     }
-
-    // Observe outputVolume
-    [self.session addObserver:self
-                   forKeyPath:sessionVolumeKeyPath
-                      options:(NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew)
-                      context:sessionContext];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(volumeChanged:)
+                                                 name:@"AVSystemController_SystemVolumeDidChangeNotification"
+                                               object:nil];
+    
+//    // Observe outputVolume
+//    [self.session addObserver:self
+//                   forKeyPath:sessionVolumeKeyPath
+//                      options:(NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew)
+//                      context:sessionContext];
 
     // Audio session is interrupted when you send the app to the background,
     // and needs to be set to active again when it goes to app goes back to the foreground
@@ -172,16 +179,19 @@ static CGFloat minVolume                    = 0.4f;
 }
 
 - (void)setInitialVolume {
-    self.initialVolume = self.session.outputVolume;
-    if (self.initialVolume > maxVolume) {
-        self.initialVolume = maxVolume;
-        self.isAdjustingInitialVolume = YES;
-        [self setSystemVolume:self.initialVolume];
-    } else if (self.initialVolume < minVolume) {
-        self.initialVolume = minVolume;
-        self.isAdjustingInitialVolume = YES;
-        [self setSystemVolume:self.initialVolume];
-    }
+//    self.initialVolume = self.session.outputVolume;
+//    if (self.initialVolume > maxVolume) {
+//        self.initialVolume = maxVolume;
+//        self.isAdjustingInitialVolume = YES;
+//        [self setSystemVolume:self.initialVolume];
+//    } else if (self.initialVolume < minVolume) {
+//        self.initialVolume = minVolume;
+//        self.isAdjustingInitialVolume = YES;
+//        [self setSystemVolume:self.initialVolume];
+//    }
+    
+    self.initialVolume = 0.5;
+    [self setSystemVolume:self.initialVolume];
 }
 
 - (void)applicationDidChangeActive:(NSNotification *)notification {
@@ -216,6 +226,37 @@ static CGFloat minVolume                    = 0.4f;
 {
     JPSLogInfo(@"mediaServicesWereReset");
     [self setupSession];
+}
+
+- (void)volumeChanged:(NSNotification *)notification
+{
+    //JPSLogDebug(@"volumeChanged (%d %f): %@", _isAdjustingInitialVolume, _lastVolume, notification.userInfo);
+    
+    CGFloat volume = [notification.userInfo[@"AVSystemController_AudioVolumeNotificationParameter"] doubleValue];
+    if (volume == _lastVolume)
+    {
+        return;
+    }
+    
+    NSString *reason = notification.userInfo[@"AVSystemController_AudioVolumeChangeReasonNotificationParameter"];
+    if ([reason isEqualToString:@"ExplicitVolumeChange"])
+    {
+        if (!_isAdjustingInitialVolume)
+        {
+            if (volume > _lastVolume) {
+                if (self.upBlock) self.upBlock();
+            } else {
+                if (self.downBlock) self.downBlock();
+            }
+            
+            // Reset volume
+            [self setSystemVolume:self.initialVolume];
+        }
+        
+        self.isAdjustingInitialVolume = NO;
+    }
+    
+    //JPSLogDebug(@"done volumeChanged (%d): %@", _isAdjustingInitialVolume, notification.userInfo);
 }
 
 #pragma mark - Convenience
@@ -280,6 +321,7 @@ static CGFloat minVolume                    = 0.4f;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
     [[MPMusicPlayerController applicationMusicPlayer] setVolume:(float)volume];
+    self.lastVolume = volume;
 #pragma clang diagnostic pop
 }
 
