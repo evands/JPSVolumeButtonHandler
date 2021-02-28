@@ -41,11 +41,6 @@ static CGFloat minVolume                    = 0.4f;
         _appIsActive = YES;
         _sessionCategory = AVAudioSessionCategoryPlayAndRecord;
 
-        _volumeView = [[MPVolumeView alloc] initWithFrame:CGRectMake(MAXFLOAT, MAXFLOAT, 0, 0)];
-
-        [[UIApplication sharedApplication].windows.firstObject addSubview:_volumeView];
-        
-        _volumeView.hidden = YES;
     }
     return self;
 }
@@ -56,6 +51,15 @@ static CGFloat minVolume                    = 0.4f;
 }
 
 - (void)startHandler:(BOOL)disableSystemVolumeHandler {
+	if (!self.volumeView) {
+		self.volumeView = [[MPVolumeView alloc] initWithFrame:CGRectMake(MAXFLOAT, MAXFLOAT, 0, 0)];
+		_volumeView.hidden = YES;
+	}
+
+	if (!self.volumeView.superview) {
+		[[UIApplication sharedApplication].windows.firstObject addSubview:_volumeView];
+	}
+
     [self setupSession];
     self.volumeView.hidden = NO; // Start visible to prevent changes made during setup from showing default volume
     self.disableSystemVolumeHandler = disableSystemVolumeHandler;
